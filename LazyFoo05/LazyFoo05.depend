@@ -1,0 +1,6 @@
+# depslib dependency file v1.0
+1528388735 source:c:\users\udchstore\desktop\code\cpp\learnsdl\lazyfoo05\main.cpp
+	<cstdio>
+	<string>
+	"SDL.h"
+
