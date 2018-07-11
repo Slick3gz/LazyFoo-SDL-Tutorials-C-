@@ -2,5 +2,6 @@
 **/*.layout
 **/*.depend
 **/*.exe
+**/*.o
 **/bin
 **/obj
