@@ -1,6 +1,209 @@
 #include <cstdio>
 #include <string>
-#include "SDL.h"
+#include <sdl.h>
+
+/*************************************************************************
+ Texture wrapper class
+*************************************************************************/
+class LTexture
+{
+public:
+    // Constructor
+    LTexture();
+
+    // Desstructor
+    ~LTexture();
+
+    // Loads image at specified path
+    bool loadFromFile(std::string path);
+    #ifdef _SDL_TTF_H
+    // Creates image from string
+    bool loadFromRenderedText(std::string textureText, SDL_Color textColor);
+    #endif // _SDL_TTF_H
+
+    // Deallocate texture
+    void free();
+
+    // Renders texture at a given point
+    void render(int x, int y,
+                SDL_Rect* clip = nullptr,
+                double angle = 0.0,
+                SDL_Point* center = nullptr,
+                SDL_RendererFlip flip = SDL_FLIP_NONE);
+
+    // Set color Modulation
+    void setColor(Uint8 red, Uint8 green, Uint8 blue);
+
+    // Set alpha blending
+    void setBlendMode(SDL_BlendMode blending);
+
+    // Set Alpha
+    void setAlpha(Uint8 alpha);
+
+    // Gets image dimensions
+    int getWidth();
+    int getHeight();
+
+private:
+    // The actual hardware texture
+    SDL_Texture* mTexture;
+
+    // Image dimensions
+    int mWidth;
+    int mHeight;
+};
+
+/*********************************************************************/
+/*********************************************************************
+LTexture Method Declarations
+*********************************************************************/
+
+// Constructor
+LTexture::LTexture()
+{
+    // Initialize
+    mTexture = nullptr;
+    mWidth = 0;
+    mHeight = 0;
+}
+
+LTexture::~LTexture()
+{
+    // Deallocate
+    free();
+}
+
+bool LTexture::loadFromFile(std::string path)
+{
+    //The final texture
+    SDL_Texture* newTexture = nullptr;
+
+    // Load image at the specified path
+    SDL_Surface* loadedSurface = IMG_Load(path.c_str() );
+    if( loadedSurface == nullptr)
+    {
+        printf("Unable to load image %s! SDL_image Error: %s\n",
+               path.c_str(), SDL_GetError());
+    }
+    else
+    {
+        // Color key image
+        SDL_SetColorKey(loadedSurface, SDL_TRUE,
+                        SDL_MapRGB(loadedSurface->format, 0, 0xff, 0xff) );
+
+        // Create texture from surface pixels
+        newTexture = SDL_CreateTextureFromSurface(gRenderer, loadedSurface);
+        if( newTexture == nullptr)
+        {
+            printf("Unable to create texture from %s! SDL_Error: %s",
+                   path.c_str(), SDL_GetError());
+        }
+        else
+        {
+            // Get image dimensions
+            mWidth = loadedSurface->w;
+            mHeight = loadedSurface->h;
+        }
+
+        SDL_FreeSurface( loadedSurface );
+    }
+    mTexture = newTexture;
+    return mTexture != nullptr;
+}
+
+void LTexture::free()
+{
+    // Free texture if it exists
+    if ( mTexture != nullptr)
+    {
+        SDL_DestroyTexture( mTexture );
+        mTexture = nullptr;
+        mWidth = 0;
+        mHeight = 0;
+    }
+}
+#ifdef _SDL_TTF_H
+// Create image from text
+bool LTexture::loadFromRenderedText( std::string textureText, SDL_Color textColor)
+{
+    // Get rid of preexisting texture
+    free();
+
+    // Render text surface
+    SDL_Surface* textSurface = TTF_RenderText_Solid(gFont, textureText.c_str(), textColor );
+    if(textSurface == nullptr)
+    {
+        std::cout << "Unable to render text surface! SDL_ttf Error: " << TTF_GetError() << std::endl;
+    }
+    else
+    {
+        // Create texture from surface pixels
+        mTexture = SDL_CreateTextureFromSurface(gRenderer, textSurface);
+        if( mTexture == nullptr)
+        {
+            std::cout << "Unable to create texture from rendered text! SDL Error: " << SDL_GetError() << std::endl;
+        }
+        else
+        {
+            // Get image dimensions
+            mWidth = textSurface->w;
+            mHeight = textSurface->h;
+        }
+        // Get rid of old surface
+        SDL_FreeSurface( textSurface );
+    }
+    return mTexture != nullptr;
+}
+#endif // _SDL_TTF_H
+
+// Set color Modulation
+void LTexture::setColor(Uint8 red, Uint8 green, Uint8 blue)
+{
+    SDL_SetTextureColorMod(mTexture, red, green, blue);
+}
+
+// Set alpha blending
+void LTexture::setBlendMode(SDL_BlendMode blending)
+{
+    SDL_SetTextureBlendMode(mTexture, blending);
+}
+
+// Set Alpha
+void LTexture::setAlpha(Uint8 alpha)
+{
+    SDL_SetTextureAlphaMod(mTexture, alpha);
+}
+
+void LTexture::render(int x, int y,
+                SDL_Rect* clip,
+                double angle,
+                SDL_Point* center,
+                SDL_RendererFlip flip)
+{
+    // Set rendering space and render to screen
+    SDL_Rect renderQuad = {x,y, mWidth, mHeight};
+
+    // Set clip rendering dimensions
+    if( clip != nullptr)
+    {
+        renderQuad.w = clip->w;
+        renderQuad.h = clip->h;
+    }
+
+    // Render to screen
+    SDL_RenderCopyEx(gRenderer, mTexture, clip, &renderQuad, angle, center, flip);
+}
+
+int LTexture::getWidth()
+{
+    return mWidth;
+}
+
+int LTexture::getHeight()
+{
+    return mHeight;
+}
+/**************************************************************************/
 
         // Key press surfaces constants
 /*******************************************/
@@ -190,6 +393,9 @@ int main(int argc, char* args[])
             // Event handler
             SDL_Event event;
 
+            // Current rendered texture
+            LTexture* currentTexture = nullptr;
+
             // Set default current surface
             gCurrentSurface = gKeyPressSurfaces[ KEY_PRESS_SURFACE_DEFAULT ];
 
@@ -204,31 +410,10 @@ int main(int argc, char* args[])
                     {
                         quit = true;
                     }
-
-                    // User presses a key
-                    else if(event.type == SDL_KEYDOWN)
-                    {
-                        // Select surfaces base on key press
-                        switch(event.key.keysym.sym)
-                        {
-                        case SDLK_UP:
-                            gCurrentSurface = gKeyPressSurfaces[ KEY_PRESS_SURFACE_UP ];
-                            break;
-                        case SDLK_DOWN:
-                            gCurrentSurface = gKeyPressSurfaces[ KEY_PRESS_SURFACE_DOWN ];
-                            break;
-                        case SDLK_LEFT:
-                            gCurrentSurface = gKeyPressSurfaces[ KEY_PRESS_SURFACE_LEFT ];
-                            break;
-                        case SDLK_RIGHT:
-                            gCurrentSurface = gKeyPressSurfaces[ KEY_PRESS_SURFACE_RIGHT ];
-                            break;
-                        default:
-                            gCurrentSurface = gKeyPressSurfaces[ KEY_PRESS_SURFACE_DEFAULT ];
-                            break;
-                        }
-                    }
                 }
+
+                // Set texture base on current keystate
+                const Uint8* currentKeyStates = SDL_GetKeyboardSat
 
 
                 // Apply the current image

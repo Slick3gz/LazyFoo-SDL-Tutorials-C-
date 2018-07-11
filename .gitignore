@@ -1,0 +1,6 @@
+**/*.cbp
+**/*.layout
+**/*.depend
+**/*.exe
+**/bin
+**/obj
